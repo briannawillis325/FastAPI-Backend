@@ -31,12 +31,25 @@ def parse_date (date_str: str) -> str:
         # Try common date formats
         for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
             try:
-                return datetime.strptime (date_str. fmt).strftime ("%Y-%m-%d")
+                parsed_date = datetime.strptime (date_str, fmt)
+
+                # Validate publication year
+                year = parsed_date.year
+
+                if not 1800 <= year <= datetime.now ().year:
+                    raise HTTPException (
+                        status_code = 400,
+                        detail = "Publication year must be between 1800 and the current year."
+                    )
+
+                return parsed_date.strftime ("%Y-%m-%d")
+
             except ValueError:
                 continue
+                
         # Fallback to original if parsing fails
         return date_str 
-    except Exception:0
+    except Exception:
         return date_str
 
 @app.get ("/book/{isbn}", response_model = CachedBookResponse)

@@ -15,10 +15,19 @@ def print_response (response):
         print (response.text)
 
 @app.command ()
-def get_book (isbn: str):
+def get_book (isbn: str, min_year: int = typer.Option (None, "--min-year")):
     """Fetch book details by ISBN."""
     try:
         response = requests.get (f"{BASE_URL}/book/{isbn}")
+
+        if response.status_code == 200 and min_year is not None:
+            result = response.json ()
+            book = result.get ("data", result)
+
+            if int (book ["publish_date"]) < min_year:
+                typer.echo (f"Book published before {min_year}.")
+                return
+
         print_response (response)
     except requests.RequestException as e:
         typer.echo (f"Error: Failed to connect to server - {str (e)}")
