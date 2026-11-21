@@ -6,12 +6,19 @@ from datetime import datetime
 
 app = FastAPI ()
 
+# This dictionary will store book information using the ISBN as the key
+book_cache = {}
+
 # Defines response model
 class Book (BaseModel):
     title: str 
     author: str
     publish_date: str
     isbn: str
+
+class CachedBookResponse (BaseModel):
+    cached: bool
+    data: Book
 
 # RegEx for ISBN-10 or ISBN-13 validation
 ISBN_REGEX = r"^(?:\d{10}|\d{13})$"
@@ -29,24 +36,30 @@ def parse_date (date_str: str) -> str:
                 continue
         # Fallback to original if parsing fails
         return date_str 
-    except Exception:
+    except Exception:0
         return date_str
 
-@app.get ("/book/{isbn}", response_model = Book)
+@app.get ("/book/{isbn}", response_model = CachedBookResponse)
 async def get_book_by_isbn (isbn):
     # Validate ISBN
     if not validate_isbn (isbn):
         raise HTTPException (status_code = 400, detail = "Invalid ISBN format. Format must be 10 or 13 digits. ")
 
+    if isbn in book_cache:
+        return CachedBookResponse (
+            cached = True,
+            data = book_cache [isbn]
+        )
+
     # Fetch from Open Library API
     try:
-        url = f"http://openlibrary.org/api/books?bibkeys=ISBN: {isbn}&format=json&jscmd=data"
+        url = f"http://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
         response = requests.get (url)
         response.raise_for_status ()
         data = response.json ()
 
         # Check if book data exists
-        book_key = f"ISBN: {isbn}"
+        book_key = f"ISBN:{isbn}"
         if book_key not in data:
             raise HTTPException (status_code = 404, detail = "Book not found. ")
 
@@ -55,12 +68,16 @@ async def get_book_by_isbn (isbn):
         authors = book_data.get ("authors", [{"name": "Unknown"}]) [0] ["name"]
         publish_date = parse_date (book_data.get ("publish_date", "Unknown"))
 
-        return Book (
+        book = Book (
             title = title,
             author = authors,
             publish_date = publish_date,
             isbn = isbn
             )
+
+        book_cache [isbn] = book
+
+        return CachedBookResponse (cached = False, data = book)
     
     except requests.RequestException as e:
         raise HTTPException (status_code = 500, detail = f"Error fetching book data: {str (e)}")
