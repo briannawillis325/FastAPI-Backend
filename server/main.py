@@ -1,8 +1,22 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
 from pydantic import BaseModel
 import requests
 import re
 from datetime import datetime
+
+security = HTTPBasic ()
+def verify_user (credentials: HTTPBasicCredentials):
+    valid_user = secrets.compare_digest (credentials.username, "user")
+    valid_password = secrets.compare_digest (credentials.password, "password")
+
+    if not (valid_user and valid_password):
+        raise HTTPException (
+            status_code = 401,
+            detail = "Invalid credentials.",
+            headers = {"WWW-Authenticate": "Basic"}
+        )
 
 app = FastAPI ()
 
@@ -46,14 +60,16 @@ def parse_date (date_str: str) -> str:
 
             except ValueError:
                 continue
-                
+
         # Fallback to original if parsing fails
         return date_str 
     except Exception:
         return date_str
 
 @app.get ("/book/{isbn}", response_model = CachedBookResponse)
-async def get_book_by_isbn (isbn):
+async def get_book_by_isbn (isbn: str, credentials: HTTPBasicCredentials = Depends(security)):
+    verify_user (credentials)
+    
     # Validate ISBN
     if not validate_isbn (isbn):
         raise HTTPException (status_code = 400, detail = "Invalid ISBN format. Format must be 10 or 13 digits. ")
